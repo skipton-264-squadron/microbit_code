@@ -1,0 +1,105 @@
+from microbit import *
+import radio
+import music
+import speech
+import math
+
+# Setup
+radio.on()
+radio.config(channel=7)
+
+morse = ""
+current_word = ""
+message_history = []
+last_alert_time = -300000 
+
+codes = {
+    ".-": "A", "-...": "B", "-.-.": "C", "-..": "D",
+    ".": "E", "..-.": "F", "--.": "G", "....": "H",
+    "..": "I", ".---": "J", "-.-": "K", ".-..": "L",
+    "--": "M", "-.": "N", "---": "O", ".--.": "P",
+    "--.-": "Q", ".-.": "R", "...": "S", "-": "T",
+    "..-": "U", "...-": "V", ".--": "W", "-..-": "X",
+    "-.--": "Y", "--..": "Z"
+}
+
+while True:
+    # 1. FIRM SHAKE LOGIC (Compass)
+    accel_x = accelerometer.get_x()
+    accel_y = accelerometer.get_y()
+    accel_z = accelerometer.get_z()
+    shake_force = math.sqrt(accel_x**2 + accel_y**2 + accel_z**2)
+
+    if shake_force > 2600:
+        angle = compass.heading()
+        # Increased delay to 150 for slower scrolling
+        display.scroll(str(angle), delay=150)
+        sleep(500) 
+        continue
+
+    # 2. TEMPERATURE MONITOR
+    temp = temperature()
+    now = running_time()
+    
+    if temp > 30 or temp <= 5:
+        if now - last_alert_time >= 300000:
+            msg = "too hot" if temp > 30 else "too cold"
+            speech.say(msg, speed=90)
+            music.pitch(440, 4000, wait=False)
+            display.scroll(msg, delay=70)
+            last_alert_time = now 
+    else:
+        last_alert_time = now - 300000
+
+    # 3. RECEIVE MESSAGES
+    incoming = radio.receive()
+    if incoming:
+        if incoming == "PING":
+            music.pitch(880, 150)
+        else:
+            display.scroll(incoming, delay=70)
+            message_history.append(incoming)
+
+    # 4. DOT or DOUBLE‑TAP A (Radio PING)
+    if button_a.was_pressed():
+        sleep(200)
+        if button_a.was_pressed():
+            music.pitch(880, 150)
+            radio.send("PING")
+        else:
+            morse += "."
+            display.show(".")
+            sleep(150)
+            display.clear()
+
+    # 5. DASH or DOUBLE‑TAP B (Letter Finish/Backspace)
+    if button_b.was_pressed():
+        sleep(200)
+        if button_b.was_pressed():
+            if morse == "----":
+                current_word = current_word[:-1]
+                display.show(Image.ARROW_W)
+            elif morse in codes:
+                letter = codes[morse]
+                current_word += letter
+                display.show(letter)
+            else:
+                display.show("?")
+            sleep(500)
+            display.clear()
+            morse = ""
+        else:
+            morse += "-"
+            display.show("-")
+            sleep(150)
+            display.clear()
+
+    # 6. SEND WORD (Logo)
+    if pin_logo.is_touched() and current_word:
+        radio.send(current_word)
+        display.scroll(current_word, delay=70)
+        message_history.append("Me: " + current_word)
+        current_word = ""
+        sleep(500)
+    
+    sleep(10)
