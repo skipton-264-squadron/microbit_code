@@ -2,16 +2,18 @@ from microbit import *
 import radio
 import music
 import speech
-import math
 
 # Setup
 radio.on()
 radio.config(channel=7)
+# Set range to 8 to make the shake sensor less sensitive
+accelerometer.set_range(8)
 
 morse = ""
 current_word = ""
 message_history = []
 last_alert_time = -300000 
+is_muted = False  
 
 codes = {
     ".-": "A", "-...": "B", "-.-.": "C", "-..": "D",
@@ -24,20 +26,24 @@ codes = {
 }
 
 while True:
-    # 1. FIRM SHAKE LOGIC (Compass)
-    accel_x = accelerometer.get_x()
-    accel_y = accelerometer.get_y()
-    accel_z = accelerometer.get_z()
-    shake_force = math.sqrt(accel_x**2 + accel_y**2 + accel_z**2)
+    # 1. MUTE TOGGLE (Pin 0 and 2)
+    if pin0.is_touched() and pin2.is_touched():
+        is_muted = not is_muted  
+        if is_muted:
+            display.show(Image.ASLEEP) # Using ASLEEP for Mute
+        else:
+            display.show(Image.MUSIC_QUAVER)
+        sleep(800) 
+        display.clear()
 
-    if shake_force > 2600:
+    # 2. SHAKE LOGIC
+    if accelerometer.was_gesture("shake"):
         angle = compass.heading()
-        # Increased delay to 150 for slower scrolling
         display.scroll(str(angle), delay=150)
-        sleep(500) 
+        sleep(400) 
         continue
 
-    # 2. TEMPERATURE MONITOR
+    # 3. TEMPERATURE MONITOR
     temp = temperature()
     now = running_time()
     
@@ -51,20 +57,22 @@ while True:
     else:
         last_alert_time = now - 300000
 
-    # 3. RECEIVE MESSAGES
+    # 4. RECEIVE MESSAGES
     incoming = radio.receive()
     if incoming:
         if incoming == "PING":
-            music.pitch(880, 150)
+            if not is_muted:
+                music.pitch(880, 150)
         else:
             display.scroll(incoming, delay=70)
             message_history.append(incoming)
 
-    # 4. DOT or DOUBLE‑TAP A (Radio PING)
+    # 5. DOT or DOUBLE‑TAP A (Radio PING)
     if button_a.was_pressed():
         sleep(200)
         if button_a.was_pressed():
-            music.pitch(880, 150)
+            if not is_muted:
+                music.pitch(880, 150)
             radio.send("PING")
         else:
             morse += "."
@@ -72,13 +80,13 @@ while True:
             sleep(150)
             display.clear()
 
-    # 5. DASH or DOUBLE‑TAP B (Letter Finish/Backspace)
+    # 6. DASH or DOUBLE‑TAP B (Letter Finish/Space)
     if button_b.was_pressed():
         sleep(200)
         if button_b.was_pressed():
             if morse == "----":
-                current_word = current_word[:-1]
-                display.show(Image.ARROW_W)
+                current_word += " "
+                display.show("_") 
             elif morse in codes:
                 letter = codes[morse]
                 current_word += letter
@@ -94,7 +102,7 @@ while True:
             sleep(150)
             display.clear()
 
-    # 6. SEND WORD (Logo)
+    # 7. SEND WORD (Logo)
     if pin_logo.is_touched() and current_word:
         radio.send(current_word)
         display.scroll(current_word, delay=70)
@@ -102,4 +110,4 @@ while True:
         current_word = ""
         sleep(500)
     
-    sleep(10)
+    sleep(20)
