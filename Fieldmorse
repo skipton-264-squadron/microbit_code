@@ -1,4 +1,4 @@
-from microbit import *                                          #not sure if this works or not :/
+from microbit import *
 import radio
 import music
 import speech
@@ -17,7 +17,7 @@ is_muted = False
 pin1_hold_start = 0
 
 codes = {
-    ".-": "A", "-...": "B", "-.-.": "C", "-..", "D",
+    ".-": "A", "-...": "B", "-.-.": "C", "-..": "D",
     ".": "E", "..-.": "F", "--.": "G", "....": "H",
     "..": "I", ".---": "J", "-.-": "K", ".-..": "L",
     "--": "M", "-.": "N", "---": "O", ".--.": "P",
@@ -74,29 +74,21 @@ while True:
             pin1_hold_start = 0
             display.clear()
 
-    # 4. COMPASS SHAKE LOGIC
-    # ax, ay, az are used to calculate the "snap" force of the shake
+    # 4. COMPASS SHAKE LOGIC (HIGH INTENSITY RE-TUNING)
     ax, ay, az = accelerometer.get_x(), accelerometer.get_y(), accelerometer.get_z()
-    if (ax*ax + ay*ay + az*az) > 6760000:
-        # Check if compass needs calibration
-        if not compass.is_calibrated():
-            compass.calibrate()
-        
-        # Get degrees (0-359)
-        degrees = compass.heading()
-        
-        # Determine direction label
-        if degrees < 45 or degrees >= 315:
-            dir_label = "N"
-        elif degrees < 135:
-            dir_label = "E"
-        elif degrees < 225:
-            dir_label = "S"
-        else:
-            dir_label = "W"
+    # 8000000 requires a very firm, deliberate snap to trigger
+    if (ax*ax + ay*ay + az*az) > 8000000:
+        try:
+            if not compass.is_calibrated():
+                compass.calibrate()
             
-        display.scroll(str(degrees) + dir_label, delay=100)
-        sleep(400) 
+            degrees = compass.heading()
+            
+            display.clear()
+            display.scroll(str(degrees), delay=50, wait=True)
+            display.clear()
+        except:
+            display.clear()
         continue
 
     # 5. TEMPERATURE MONITOR
